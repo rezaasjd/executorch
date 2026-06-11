@@ -90,6 +90,13 @@ if(EXECUTORCH_BUILD_CUDA)
   target_link_libraries(slimtensor INTERFACE CUDA::cudart extension_cuda)
 endif()
 
+# Add HIP support for SlimTensor when building with ROCm
+if(EXECUTORCH_BUILD_ROCM)
+  find_package(hip REQUIRED)
+  target_include_directories(slimtensor INTERFACE ${HIP_INCLUDE_DIRS})
+  target_link_libraries(slimtensor INTERFACE hip::host extension_hip)
+endif()
+
 install(
   TARGETS slimtensor
   EXPORT ExecuTorchTargets
@@ -104,6 +111,9 @@ install(
 set(_aoti_common_shims_slim_sources common_shims_slim.cpp)
 if(EXECUTORCH_BUILD_CUDA)
   list(APPEND _aoti_common_shims_slim_sources slim/cuda/guard.cpp)
+endif()
+if(EXECUTORCH_BUILD_ROCM)
+  list(APPEND _aoti_common_shims_slim_sources slim/hip/guard.cpp)
 endif()
 
 add_library(aoti_common_shims_slim STATIC ${_aoti_common_shims_slim_sources})

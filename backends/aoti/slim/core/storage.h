@@ -17,6 +17,13 @@
 #include <executorch/extension/cuda/caller_stream.h>
 #endif
 
+#ifdef HIP_AVAILABLE
+#include <executorch/backends/aoti/slim/c10/hip/Exception.h>
+#include <executorch/backends/aoti/slim/hip/guard.h>
+#include <executorch/backends/rocm/runtime/rocm_allocator.h>
+#include <executorch/extension/hip/caller_stream.h>
+#endif
+
 #include <executorch/backends/aoti/slim/c10/core/Device.h>
 #include <executorch/backends/aoti/slim/c10/core/ScalarType.h>
 #include <executorch/backends/aoti/slim/util/array_ref_util.h>
@@ -41,6 +48,10 @@ inline const c10::Device CPU_DEVICE = c10::Device(c10::DeviceType::CPU, 0);
 /// Default CUDA device constant.
 inline const c10::Device DEFAULT_CUDA_DEVICE =
     c10::Device(c10::DeviceType::CUDA, 0);
+
+/// Default HIP device constant.
+inline const c10::Device DEFAULT_HIP_DEVICE =
+    c10::Device(c10::DeviceType::HIP, 0);
 
 /// DeviceTraits template for device-specific operations.
 /// Device-specific implementations provide allocate(), free(), and memcpy().
@@ -224,6 +235,64 @@ struct DeviceTraits<c10::DeviceType::CUDA> {
 };
 #endif // CUDA_AVAILABLE
 
+#ifdef HIP_AVAILABLE
+template <>
+struct DeviceTraits<c10::DeviceType::HIP> {
+  static void* allocate(size_t nbytes, const c10::Device& device) {
+    (void)nbytes;
+    (void)device;
+    ET_CHECK_MSG(false, "HIP DeviceTraits not yet implemented");
+  }
+
+  static void free(void* ptr) {
+    (void)ptr;
+    ET_LOG(Error, "HIP DeviceTraits not yet implemented");
+  }
+
+  static void memcpy(
+      void* dst,
+      const void* src,
+      size_t nbytes,
+      const c10::Device& dst_device,
+      const c10::Device& src_device) {
+    (void)dst;
+    (void)src;
+    (void)nbytes;
+    (void)dst_device;
+    (void)src_device;
+    ET_CHECK_MSG(false, "HIP DeviceTraits not yet implemented");
+  }
+};
+#else
+template <>
+struct DeviceTraits<c10::DeviceType::HIP> {
+  static void* allocate(size_t nbytes, const c10::Device& device) {
+    (void)nbytes;
+    (void)device;
+    ET_CHECK_MSG(false, "Build with HIP_AVAILABLE=1 to enable HIP support");
+  }
+
+  static void free(void* ptr) {
+    (void)ptr;
+    ET_LOG(Error, "Build with HIP_AVAILABLE=1 to enable HIP support");
+  }
+
+  static void memcpy(
+      void* dst,
+      const void* src,
+      size_t nbytes,
+      const c10::Device& dst_device,
+      const c10::Device& src_device) {
+    (void)dst;
+    (void)src;
+    (void)nbytes;
+    (void)dst_device;
+    (void)src_device;
+    ET_CHECK_MSG(false, "Build with HIP_AVAILABLE=1 to enable HIP support");
+  }
+};
+#endif // HIP_AVAILABLE
+
 /**
  * MaybeOwningStorage - A storage class that manages tensor data memory.
  *
@@ -253,6 +322,9 @@ class MaybeOwningStorage {
     } else if (device.is_cuda()) {
       data_ = DeviceTraits<c10::DeviceType::CUDA>::allocate(nbytes, device);
       deleter_ = DeviceTraits<c10::DeviceType::CUDA>::free;
+    } else if (device.is_hip()) {
+      data_ = DeviceTraits<c10::DeviceType::HIP>::allocate(nbytes, device);
+      deleter_ = DeviceTraits<c10::DeviceType::HIP>::free;
     } else {
       ET_CHECK_MSG(false, "Unsupported device type: %s", device.str().c_str());
     }
@@ -268,7 +340,7 @@ class MaybeOwningStorage {
         capacity_(nbytes),
         deleter_(detail::noop),
         is_owning_(false) {
-    if (!device.is_cuda() && !device.is_cpu()) {
+    if (!device.is_cuda() && !device.is_cpu() && !device.is_hip()) {
       ET_CHECK_MSG(false, "Unsupported device type: %s", device.str().c_str());
     }
   }

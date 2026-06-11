@@ -36,7 +36,7 @@ struct Device final {
   }
 
   /// Constructs a Device from a string description.
-  /// The string must be "cpu", "cpu:0", "cuda", or "cuda:N".
+  /// The string must be "cpu", "cpu:0", "cuda", "cuda:N", "hip", or "hip:N".
   /* implicit */ Device(const std::string& device_string)
       : Device(DeviceType::CPU) {
     ET_CHECK_MSG(!device_string.empty(), "Device string must not be empty");
@@ -55,10 +55,18 @@ struct Device final {
         device_string.substr(0, 5) == "CUDA:") {
       type_ = DeviceType::CUDA;
       index_ = static_cast<DeviceIndex>(device_string.back() - '0');
+    } else if (device_string == "hip" || device_string == "HIP") {
+      type_ = DeviceType::HIP;
+      index_ = 0;
+    } else if (
+        device_string.substr(0, 4) == "hip:" ||
+        device_string.substr(0, 4) == "HIP:") {
+      type_ = DeviceType::HIP;
+      index_ = static_cast<DeviceIndex>(device_string.back() - '0');
     } else {
       ET_CHECK_MSG(
           false,
-          "Invalid device string: %s. Supported: 'cpu', 'cuda', 'cuda:N'.",
+          "Invalid device string: %s. Supported: 'cpu', 'cuda', 'cuda:N', 'hip', 'hip:N'.",
           device_string.c_str());
     }
     validate();
@@ -103,6 +111,11 @@ struct Device final {
   /// Returns true if the device is of CUDA type.
   bool is_cuda() const noexcept {
     return type_ == DeviceType::CUDA;
+  }
+
+  /// Returns true if the device is of HIP type.
+  bool is_hip() const noexcept {
+    return type_ == DeviceType::HIP;
   }
 
   /// Returns a string representation of the device (e.g., "cpu" or "cuda:0").
